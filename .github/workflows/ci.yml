@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [20]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Lint
+        run: npm run lint --if-present
+        continue-on-error: true
+
+  deploy:
+    needs: build-and-test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Deploy placeholder
+        run: |
+          echo "✅ CI pasó — listo para deploy"
+          echo "📦 Destino: Lightsail eu-west-2 (whatsapp.primecore.online)"
+          echo "🔧 Configurar SSH key + host en Secrets del repo"
