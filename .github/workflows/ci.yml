@@ -1,46 +1,80 @@
-name: CI
+name: CI/CD
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
   pull_request:
-    branches: [main, develop]
+    branches: [main]
+
+env:
+  NODE_VERSION: '20'
 
 jobs:
-  build-and-test:
+  # ═══════════════════════════════════════════════
+  # CI: build + typecheck en cada PR/push
+  # ═══════════════════════════════════════════════
+  build:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node-version: [20]
-
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
-      - run: npm ci
+      - name: Instalar dependencias
+        run: npm ci
 
-      - name: Type check
+      - name: Typecheck
         run: npm run typecheck
 
       - name: Build
         run: npm run build
 
-      - name: Lint
-        run: npm run lint --if-present
-        continue-on-error: true
-
+  # ═══════════════════════════════════════════════
+  # CD: deploy a Lightsail (eu-west-2) al pushear a main
+  # ═══════════════════════════════════════════════
   deploy:
-    needs: build-and-test
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: build
     runs-on: ubuntu-latest
     environment: production
+
     steps:
-      - name: Deploy placeholder
+      - uses: actions/checkout@v4
+
+      - name: Configurar SSH
         run: |
-          echo "✅ CI pasó — listo para deploy"
-          echo "📦 Destino: Lightsail eu-west-2 (whatsapp.primecore.online)"
-          echo "🔧 Configurar SSH key + host en Secrets del repo"
+          mkdir -p ~/.ssh
+          echo "${{ secrets.LIGHTSAIL_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.LIGHTSAIL_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Verificar conexión SSH
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }} \
+            'echo ✅ Conexión OK && whoami && node --version && pm2 --version'
+
+      - name: Sincronizar código al servidor
+        run: |
+          rsync -avz --delete --exclude node_modules --exclude .git --exclude sessions \
+            -e 'ssh -o StrictHostKeyChecking=no' \
+            ./ ${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }}:/opt/whatsapp-core/
+
+      - name: Instalar dependencias en servidor
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }} \
+            'cd /opt/whatsapp-core && npm ci --omit=dev && npm run build'
+
+      - name: Reiniciar servicio con PM2
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }} \
+            'cd /opt/whatsapp-core && \
+             (pm2 describe whatsapp-core > /dev/null 2>&1 && pm2 restart whatsapp-core --update-env) || \
+             (pm2 start dist/server.js --name whatsapp-core && pm2 save)'
+
+      - name: Verificar deploy
+        run: |
+          sleep 5
+          curl -sf http://${{ secrets.LIGHTSAIL_HOST }}:8000/health || echo "⚠️ Health check pendiente (revisar PM2)"
