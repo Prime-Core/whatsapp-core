@@ -32,6 +32,12 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Subir dist como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
   # ═══════════════════════════════════════════════
   # CD: deploy a Lightsail (eu-west-2) al pushear a main
   # ═══════════════════════════════════════════════
@@ -43,6 +49,12 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Descargar dist compilado
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
 
       - name: Configurar SSH
         run: |
@@ -61,16 +73,21 @@ jobs:
           ssh -o StrictHostKeyChecking=no ${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }} \
             'sudo mkdir -p /opt/whatsapp-core && sudo chown -R ${{ secrets.LIGHTSAIL_USER }}:${{ secrets.LIGHTSAIL_USER }} /opt/whatsapp-core'
 
-      - name: Sincronizar código al servidor
+      - name: Sincronizar código (sin dist — va como artefacto)
         run: |
-          rsync -avz --delete --exclude node_modules --exclude .git --exclude sessions --exclude '*.log' \
+          rsync -avz --delete --exclude node_modules --exclude .git --exclude sessions --exclude dist --exclude '*.log' \
             -e 'ssh -o StrictHostKeyChecking=no' \
             ./ ${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }}:/opt/whatsapp-core/
 
-      - name: Instalar dependencias en servidor
+      - name: Subir dist compilado
+        run: |
+          rsync -avz --delete -e 'ssh -o StrictHostKeyChecking=no' \
+            ./dist/ ${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }}:/opt/whatsapp-core/dist/
+
+      - name: Instalar dependencias de producción
         run: |
           ssh -o StrictHostKeyChecking=no ${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }} \
-            'cd /opt/whatsapp-core && npm ci --omit=dev && npm run build'
+            'cd /opt/whatsapp-core && npm ci --omit=dev'
 
       - name: Reiniciar servicio con PM2
         run: |
