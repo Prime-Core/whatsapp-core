@@ -54,11 +54,16 @@ jobs:
       - name: Verificar conexión SSH
         run: |
           ssh -o StrictHostKeyChecking=no ${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }} \
-            'echo ✅ Conexión OK && whoami && node --version && pm2 --version'
+            'echo OK && node --version && pm2 --version'
+
+      - name: Preparar directorio en servidor
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }} \
+            'sudo mkdir -p /opt/whatsapp-core && sudo chown -R ${{ secrets.LIGHTSAIL_USER }}:${{ secrets.LIGHTSAIL_USER }} /opt/whatsapp-core'
 
       - name: Sincronizar código al servidor
         run: |
-          rsync -avz --delete --exclude node_modules --exclude .git --exclude sessions \
+          rsync -avz --delete --exclude node_modules --exclude .git --exclude sessions --exclude '*.log' \
             -e 'ssh -o StrictHostKeyChecking=no' \
             ./ ${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }}:/opt/whatsapp-core/
 
@@ -71,7 +76,7 @@ jobs:
         run: |
           ssh -o StrictHostKeyChecking=no ${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }} \
             'cd /opt/whatsapp-core && \
-             (pm2 describe whatsapp-core > /dev/null 2>&1 && pm2 restart whatsapp-core --update-env) || \
+             pm2 describe whatsapp-core > /dev/null 2>&1 && pm2 restart whatsapp-core --update-env || \
              (pm2 start dist/server.js --name whatsapp-core && pm2 save)'
 
       - name: Verificar deploy
