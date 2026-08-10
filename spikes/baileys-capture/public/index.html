@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <title>Verificación de identidad — whatsapp-core</title>
+    <style>
+      :root { --bg:#0b141a; --card:#111b21; --accent:#00a884; --muted:#8696a0; --line:#233138; --text:#e9edef; }
+      * { box-sizing: border-box; }
+      body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:var(--bg); color:var(--text); }
+      .wrap { max-width: 520px; margin: 0 auto; padding: 16px; }
+      h1 { font-size: 20px; margin: 8px 0 4px; }
+      .privacy { background:#0e2a24; border:1px solid #12463b; color:#a7f3d0; font-size:13px; padding:10px 12px; border-radius:10px; margin:12px 0; }
+      .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; margin:12px 0; }
+      .card h2 { font-size:15px; margin:0 0 10px; }
+      label { display:block; font-size:13px; color:var(--muted); margin:10px 0 4px; }
+      input { width:100%; padding:11px 12px; border-radius:10px; border:1px solid var(--line); background:#0b141a; color:var(--text); font-size:15px; }
+      button { cursor:pointer; border:none; border-radius:10px; padding:12px 14px; font-size:15px; font-weight:600; }
+      .btn { background:var(--accent); color:#04231c; width:100%; }
+      .btn.secondary { background:#202c33; color:var(--text); }
+      .btn:disabled { opacity:.5; cursor:not-allowed; }
+      .slot { display:flex; gap:10px; align-items:center; }
+      .thumb { width:88px; height:60px; border-radius:8px; object-fit:cover; background:#000; border:1px solid var(--line); flex:0 0 auto; }
+      .slot .meta { flex:1; }
+      .slot .name { font-size:14px; }
+      .slot .state { font-size:12px; color:var(--muted); }
+      .slot .state.ok { color:var(--accent); }
+      .cam { position:fixed; inset:0; background:#000; display:none; flex-direction:column; z-index:50; }
+      .cam video { flex:1; width:100%; object-fit:cover; }
+      .cam .bar { display:flex; gap:10px; padding:14px; background:#000; }
+      .hint { font-size:12px; color:var(--muted); margin-top:6px; }
+      #result { white-space:pre-wrap; font-size:12px; background:#0b141a; border:1px solid var(--line); border-radius:10px; padding:10px; margin-top:10px; display:none; }
+      canvas { display:none; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Verificación de identidad</h1>
+      <div class="privacy">
+        🔒 Este formulario corre en el servidor del servicio, <b>no en WhatsApp</b>. Tus fotos y
+        datos van cifrados a nuestro backend y no se almacenan en el chat.<br />
+        <span id="cam-support" style="color:#f0ad4e">Comprobando cámara...</span>
+      </div>
+
+      <div class="card">
+        <h2>1. Documento de identidad</h2>
+        <div class="slot">
+          <img id="thumb-front" class="thumb" alt="frontal" />
+          <div class="meta">
+            <div class="name">Cédula — frontal</div>
+            <div id="state-front" class="state">Pendiente</div>
+          </div>
+          <button class="btn secondary" style="width:auto" data-slot="cedulaFront" data-facing="environment">Tomar foto</button>
+        </div>
+        <div class="slot" style="margin-top:12px">
+          <img id="thumb-back" class="thumb" alt="posterior" />
+          <div class="meta">
+            <div class="name">Cédula — posterior</div>
+            <div id="state-back" class="state">Pendiente</div>
+          </div>
+          <button class="btn secondary" style="width:auto" data-slot="cedulaBack" data-facing="environment">Tomar foto</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>2. Selfie (prueba de vida)</h2>
+        <div class="slot">
+          <img id="thumb-selfie" class="thumb" alt="selfie" />
+          <div class="meta">
+            <div class="name">Rostro</div>
+            <div id="state-selfie" class="state">Pendiente</div>
+          </div>
+          <button class="btn secondary" style="width:auto" data-slot="selfie" data-facing="user">Tomar selfie</button>
+        </div>
+        <div class="hint">La validación biométrica real se hará en el backend vía tu API REST.</div>
+      </div>
+
+      <div class="card">
+        <h2>3. Datos adicionales</h2>
+        <label for="nombres">Nombres y apellidos</label>
+        <input id="nombres" autocomplete="off" />
+        <label for="cedula">Número de cédula</label>
+        <input id="cedula" inputmode="numeric" autocomplete="off" />
+        <label for="nacimiento">Fecha de nacimiento</label>
+        <input id="nacimiento" type="date" />
+        <label for="email">Correo electrónico</label>
+        <input id="email" type="email" autocomplete="off" />
+      </div>
+
+      <button id="submit" class="btn" disabled>Enviar verificación</button>
+      <div class="hint">Nada se guarda en tu dispositivo ni en WhatsApp. Al enviar, los datos se limpian de esta página.</div>
+      <div id="result"></div>
+    </div>
+
+    <!-- Cámara a pantalla completa -->
+    <div id="cam" class="cam">
+      <video id="video" autoplay playsinline muted></video>
+      <div class="bar">
+        <button class="btn secondary" id="cancel" style="flex:1">Cancelar</button>
+        <button class="btn" id="shoot" style="flex:2">Capturar</button>
+      </div>
+    </div>
+    <canvas id="canvas"></canvas>
+
+    <script>
+      const images = { cedulaFront: null, cedulaBack: null, selfie: null };
+      const session = 'sess_' + Math.random().toString(36).slice(2);
+      let stream = null;
+      let currentSlot = null;
+
+      const camEl = document.getElementById('cam');
+      const video = document.getElementById('video');
+      const canvas = document.getElementById('canvas');
+      const submitBtn = document.getElementById('submit');
+
+      const thumbs = { cedulaFront: 'thumb-front', cedulaBack: 'thumb-back', selfie: 'thumb-selfie' };
+      const states = { cedulaFront: 'state-front', cedulaBack: 'state-back', selfie: 'state-selfie' };
+
+      async function openCamera(slot, facing) {
+        currentSlot = slot;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: facing }, audio: false
+          });
+        } catch (e) {
+          alert('No se pudo abrir la cámara: ' + e.message +
+            '\n\n(Necesita HTTPS y permiso de cámara. Acepta la advertencia de certificado.)');
+          return;
+        }
+        video.srcObject = stream;
+        camEl.style.display = 'flex';
+      }
+
+      function closeCamera() {
+        if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+        camEl.style.display = 'none';
+        currentSlot = null;
+      }
+
+      function shoot() {
+        if (!currentSlot) return;
+        const w = video.videoWidth, h = video.videoHeight;
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(video, 0, 0, w, h);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        images[currentSlot] = dataUrl;
+        document.getElementById(thumbs[currentSlot]).src = dataUrl;
+        const st = document.getElementById(states[currentSlot]);
+        st.textContent = 'Capturada ✓'; st.classList.add('ok');
+        closeCamera();
+        refresh();
+      }
+
+      function refresh() {
+        submitBtn.disabled = !(images.cedulaFront && images.cedulaBack && images.selfie);
+      }
+
+      // Detección de soporte de cámara (crítico para validar en WebView de WhatsApp)
+      (function() {
+        const el = document.getElementById('cam-support');
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          el.textContent = '❌ Cámara NO disponible. Abrí este enlace en Chrome/Safari.';
+          el.style.color = '#f85149';
+          return;
+        }
+        navigator.mediaDevices.enumerateDevices()
+          .then(devs => {
+            const cams = devs.filter(d => d.kind === 'videoinput');
+            if (cams.length === 0) {
+              el.textContent = '⚠️ Sin cámara detectada. Probá en otro dispositivo.';
+              el.style.color = '#f0ad4e';
+            } else {
+              el.textContent = '✅ Cámara OK — ' + cams.length + ' detectada(s). Podés tomar las fotos.';
+              el.style.color = '#4ade80';
+            }
+          })
+          .catch(() => {
+            el.textContent = '⚠️ No se pudo consultar la cámara. Probá igual los botones.';
+            el.style.color = '#f0ad4e';
+          });
+      })();
+
+      document.querySelectorAll('button[data-slot]').forEach(b => {
+        b.addEventListener('click', () => openCamera(b.dataset.slot, b.dataset.facing));
+      });
+      document.getElementById('shoot').addEventListener('click', shoot);
+      document.getElementById('cancel').addEventListener('click', closeCamera);
+
+      submitBtn.addEventListener('click', async () => {
+        submitBtn.disabled = true; submitBtn.textContent = 'Enviando...';
+        const payload = {
+          session,
+          form: {
+            nombres: document.getElementById('nombres').value,
+            cedula: document.getElementById('cedula').value,
+            nacimiento: document.getElementById('nacimiento').value,
+            email: document.getElementById('email').value,
+          },
+          cedulaFront: images.cedulaFront,
+          cedulaBack: images.cedulaBack,
+          selfie: images.selfie,
+        };
+        try {
+          const r = await fetch('/api/capture', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          const data = await r.json();
+          const res = document.getElementById('result');
+          res.style.display = 'block';
+          res.textContent = 'Respuesta del backend:\n' + JSON.stringify(data, null, 2);
+          // Protección de datos: limpiar todo de la página tras enviar.
+          images.cedulaFront = images.cedulaBack = images.selfie = null;
+          ['nombres','cedula','nacimiento','email'].forEach(id => document.getElementById(id).value = '');
+          submitBtn.textContent = 'Enviado ✓';
+        } catch (e) {
+          alert('Error al enviar: ' + e.message);
+          submitBtn.disabled = false; submitBtn.textContent = 'Enviar verificación';
+        }
+      });
+    </script>
+  </body>
+</html>

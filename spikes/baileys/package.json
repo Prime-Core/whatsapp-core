@@ -1,0 +1,24 @@
+{
+  "name": "whatsapp-core-spike-baileys",
+  "private": true,
+  "type": "module",
+  "version": "0.0.1",
+  "description": "Spike TASK-019: chat funcional via Baileys (numero personal) para validar capacidades.",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "dev": "tsx watch src/index.ts",
+    "send": "tsx src/send.ts",
+    "test-buttons": "tsx src/test-buttons.ts"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^7.0.0-rc13",
+    "pino": "^10.3.1",
+    "qrcode-terminal": "^0.12.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "@types/qrcode-terminal": "^0.12.2",
+    "tsx": "^4.23.0",
+    "typescript": "^7.0.2"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "whatsapp-core-spike-capture",
+  "private": true,
+  "type": "module",
+  "version": "0.0.1",
+  "description": "Spike KYC: webview HTTPS con camara + formulario. Los datos van al backend, NUNCA a WhatsApp.",
+  "scripts": {
+    "start": "tsx src/server.ts"
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "selfsigned": "^5.5.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.1.1",
+    "tsx": "^4.23.0",
+    "typescript": "^7.0.2"
+  }
+}

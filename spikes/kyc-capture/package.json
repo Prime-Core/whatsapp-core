@@ -1,0 +1,11 @@
+{
+  "name": "whatsapp-core-spike-kyc-capture",
+  "private": true,
+  "type": "module",
+  "version": "0.0.1",
+  "description": "Spike PoC E1: captura KYC (documento + camara + formulario) fuera de WhatsApp.",
+  "scripts": {
+    "start": "tsx src/server.ts",
+    "dev": "tsx watch src/server.ts"
+  }
+}

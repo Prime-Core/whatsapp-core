@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+dist/
+
+# Sesiones de WhatsApp (NO subir credenciales)
+sessions/
+auth/
+test-auth/
+test-auth2/
+test-auth3/
+
+# Archivos de prueba
+test.mjs
+test2.mjs
+test-baileys.mjs
+.task.md
+
+# Logs
+*.log
+npm-debug.log*
+
+# Env
+.env
+.env.*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/

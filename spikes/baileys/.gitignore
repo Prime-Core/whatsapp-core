@@ -1,0 +1,4 @@
+# Sesión de Baileys — NUNCA commitear (contiene credenciales del número)
+auth/
+node_modules/
+*.log
