@@ -73,7 +73,7 @@ jobs:
           ssh -o StrictHostKeyChecking=no ${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }} \
             'sudo mkdir -p /opt/whatsapp-core && sudo chown -R ${{ secrets.LIGHTSAIL_USER }}:${{ secrets.LIGHTSAIL_USER }} /opt/whatsapp-core'
 
-      - name: Sincronizar código (sin dist — va como artefacto)
+      - name: Sincronizar código (sin dist)
         run: |
           rsync -avz --delete --exclude node_modules --exclude .git --exclude sessions --exclude dist --exclude '*.log' \
             -e 'ssh -o StrictHostKeyChecking=no' \
@@ -89,6 +89,11 @@ jobs:
           ssh -o StrictHostKeyChecking=no ${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }} \
             'cd /opt/whatsapp-core && npm ci --omit=dev'
 
+      - name: Configurar proxy residencial en PM2
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }} \
+            'cd /opt/whatsapp-core && pm2 set env:WA_PROXY_URL "${{ secrets.WA_PROXY_URL }}" 2>/dev/null || true'
+
       - name: Reiniciar servicio con PM2
         run: |
           ssh -o StrictHostKeyChecking=no ${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }} \
@@ -99,4 +104,5 @@ jobs:
       - name: Verificar deploy
         run: |
           sleep 5
-          curl -sf http://${{ secrets.LIGHTSAIL_HOST }}:8000/health || echo "⚠️ Health check pendiente (revisar PM2)"
+          ssh -o StrictHostKeyChecking=no ${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }} \
+            'curl -s http://localhost:8000/health'
