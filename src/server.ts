@@ -24,7 +24,16 @@ const SESSIONS_ROOT = process.env.SESSIONS_ROOT || './sessions'
 const DEFAULT_PHONE = process.env.DEFAULT_PHONE || 'default'
 
 const app = express()
-app.use(cors())
+// Trust proxy para scheme correcto detrás de nginx (https)
+app.set('trust proxy', true)
+
+// CORS explícito: permitir cualquier origen (incluye Swagger UI)
+app.use(cors({
+  origin: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+  credentials: true,
+}))
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 
@@ -858,9 +867,11 @@ app.get('/api-docs/json', (req, res) => {
   res.send(buildSwaggerSpec(req))
 })
 
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(undefined, {
-  swaggerOptions: { url: '/api-docs/json' },
-}))
+// Servir Swagger UI con la spec EMBEBIDA (sin fetch externo → sin CORS/scheme issues)
+app.use('/api-docs', swaggerUi.serve, (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const spec = buildSwaggerSpec(req)
+  swaggerUi.setup(spec)(req, res, next)
+})
 
 // ─── Error handler ───────────────────────────────────────────
 
