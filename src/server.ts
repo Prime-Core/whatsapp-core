@@ -231,7 +231,16 @@ app.get('/health', (_req, res) => {
     status: 'ok',
     timestamp: new Date().toISOString(),
     service: 'WhatsApp Core Service',
+    version: '3.0.0',
+    proxy: process.env.WA_PROXY_URL ? 'residencial' : 'sin-proxy',
+    proxyHost: process.env.WA_PROXY_URL
+      ? new URL(process.env.WA_PROXY_URL).host
+      : null,
     sessions: registry.getAll().length,
+    whatsapp: registry.getAll().map((e) => ({
+      phone: e.phone,
+      status: e.status.ready ? 'ready' : e.status.qrCode ? 'waiting_qr' : e.status.authenticated ? 'authenticated' : 'disconnected',
+    })),
   })
 })
 
