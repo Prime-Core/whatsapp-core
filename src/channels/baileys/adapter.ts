@@ -22,6 +22,7 @@ import makeWASocket, {
   delay, Browsers,
 } from '@whiskeysockets/baileys'
 import pino from 'pino'
+import { HttpsProxyAgent } from 'https-proxy-agent'
 import type {
   ChannelAdapter, ChannelType, ChannelStatus,
   ConnectInput, ConnectResult, SendResult,
@@ -103,6 +104,13 @@ export class BaileysChannelAdapter implements ChannelAdapter {
     const { state, saveCreds } = await useMultiFileAuthState(dir)
     const { version } = await fetchLatestBaileysVersion()
 
+    // Proxy residencial opcional (env WA_PROXY_URL) para conexión desde datacenters
+    const proxyUrl = process.env.WA_PROXY_URL
+    const agent = proxyUrl ? new HttpsProxyAgent(proxyUrl) : undefined
+    if (proxyUrl) {
+      console.log(`[${this.tenantId}] Usando proxy residencial para WhatsApp`)
+    }
+
     this.sock = makeWASocket({
       version,
       auth: {
@@ -113,6 +121,7 @@ export class BaileysChannelAdapter implements ChannelAdapter {
       browser: Browsers.ubuntu('Chrome'),
       printQRInTerminal: false,
       emitOwnEvents: false,
+      agent,
     })
 
     this.sock.ev.on('creds.update', saveCreds)
